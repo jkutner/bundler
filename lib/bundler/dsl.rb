@@ -110,6 +110,17 @@ module Bundler
 
       source Source::Git.new(_normalize_hash(options).merge("uri" => uri)), source_options, &blk
     end
+    
+    def mvn(artifact, options = {}, source_options = {}, &blk) 
+      puts "artifact=#{artifact.inspect}"
+      puts "options=#{options.inspect}"
+      puts "source_options=#{source_options.inspect}"
+      if !artifact.is_a?(Hash) or !options['repo']
+        raise "At this time you must specific the artifact tuple, and the repo url"
+      end
+
+      source Source::Maven.new(_normalize_hash(options).merge("artifact" => artifact)), source_options, &blk
+    end
 
     def to_definition(lockfile, unlock)
       @sources << @rubygems_source
@@ -183,7 +194,7 @@ module Bundler
     def _normalize_options(name, version, opts)
       _normalize_hash(opts)
 
-      invalid_keys = opts.keys - %w(group groups git path name branch ref tag require submodules platform platforms)
+      invalid_keys = opts.keys - %w(group groups git path name branch ref tag require submodules platform platforms mvn repo)
       if invalid_keys.any?
         plural = invalid_keys.size > 1
         message = "You passed #{invalid_keys.map{|k| ':'+k }.join(", ")} "
@@ -210,7 +221,7 @@ module Bundler
       end
 
       # Normalize git and path options
-      ["git", "path"].each do |type|
+      ["git", "path", "mvn"].each do |type|
         if param = opts[type]
           if version.first && version.first =~ /^\s*=?\s*(\d[^\s]*)\s*$/
             options = opts.merge("name" => name, "version" => $1)

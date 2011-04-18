@@ -11,6 +11,10 @@ require 'yaml'
 require 'bundler/rubygems_ext'
 require 'bundler/version'
 
+# pretty sure there is a more prefered way to do this. i had to require
+require 'bundler/source' # had to do this to get the maven require working
+require 'bundler/maven'
+
 module Bundler
   ORIGINAL_ENV = ENV.to_hash
 
