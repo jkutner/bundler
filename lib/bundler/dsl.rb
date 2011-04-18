@@ -111,10 +111,7 @@ module Bundler
       source Source::Git.new(_normalize_hash(options).merge("uri" => uri)), source_options, &blk
     end
     
-    def mvn(artifact, options = {}, source_options = {}, &blk) 
-      puts "artifact=#{artifact.inspect}"
-      puts "options=#{options.inspect}"
-      puts "source_options=#{source_options.inspect}"
+    def mvn(artifact, options = {}, source_options = {}, &blk)
       if !artifact.is_a?(Hash) or !options['repo']
         raise "At this time you must specific the artifact tuple, and the repo url"
       end
