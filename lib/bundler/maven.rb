@@ -111,6 +111,7 @@ module Bundler
         idx = Index.new 
         spec, @pom = PomSpec.build(location, @repo)
         spec.source = self
+        spec.loaded_from = "#{Gem.dir}/specifications/#{spec.full_name}.gemspec"
         idx << spec
         idx
       end
@@ -322,7 +323,6 @@ module Bundler
         specification.authors = pom.authors
         specification.description = pom.description
         specification.homepage = pom.url
-
         specification.files = ["lib/#{pom.lib_name}", "lib/#{pom.jar_file}"]
       end
     end
