@@ -316,6 +316,7 @@ module Bundler
 
     def self.generate_spec(pom, options = {})
       spec = Gem::Specification.new do |specification|
+        # bundler doesn't like it when i use 'java' as the platform. 
         specification.platform = "ruby"
         specification.version = pom.version
         specification.name = pom.name
