@@ -17,6 +17,6 @@ describe "bundle install with maven sources" do
 
     bundle :install
 
-    should_be_installed("commons-logging.commons-logging 1.0")
+    should_be_installed("commons-logging-api 1.0")
   end
 end
