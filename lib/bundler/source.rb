@@ -254,6 +254,89 @@ module Bundler
       end
     end
 
+    class Maven < Rubygems
+      def initialize(options={})
+        super
+        @remotes << options['repo']
+        @cached_gems = {}
+      end
+
+      def remote_specs(dependencies = nil)
+        @remote_specs ||= begin
+          idx     = Index.new
+          old     = Gem.sources
+
+          if dependencies.nil?
+            dependencies = [Bundler::Dependency.new(@options['name'], @options['version'])]
+          end
+
+          specs = download_specs(dependencies)
+          specs.each do |spec|
+            idx << spec
+          end
+
+          idx
+        ensure
+          Gem.sources = old
+        end
+      end
+
+      def download_gem_from_uri(spec, uri)
+        Gem::Maven::Gemify.new(uri).generate_gem(spec.name, spec.version)
+      end
+
+      def fetch(spec)
+        spec, uri = @spec_fetch_map[spec.full_name]
+        if spec
+          @cached_gems[spec.full_name] = download_gem_from_uri(spec, uri)
+        end
+      end
+
+      def cached_gem(spec)
+        @cached_gems[spec.full_name]
+      end
+
+      private
+
+        def download_specs(dependencies)
+          specs = []
+          dependencies.each do |d|
+            if ![:development, :test, :provided].include?(d.type)
+              remotes.each do |uri|
+                Bundler.ui.info "Fetching spec for '#{d.name}' from #{uri}"
+                mvn_gemify = gemify(uri)
+
+                versions = mvn_gemify.get_versions(d.name).select do |v|
+                  d.requirement.satisfied_by? Gem::Version.new(v)
+                end
+
+                if versions.any?
+                  version = versions.sort.last
+
+                  specfile = mvn_gemify.generate_spec(d.name, version)
+                  if specfile and File.exists?(specfile)
+                    spec = Gem::Specification.from_yaml(File.read(specfile))
+                    spec.source = self
+                    @spec_fetch_map[spec.full_name] = [spec, uri]
+                    specs << spec
+                    specs += download_specs(spec.dependencies)
+                  end
+                end
+              end
+            end
+          end
+          specs
+        end
+
+        def gemify(uri)
+          if uri
+            Gem::Maven::Gemify.new(uri)
+          else
+            Gem::Maven::Gemify.new
+          end
+        end
+    end
+
     class Path
       attr_reader :path, :options
       # Kind of a hack, but needed for the lock file parser
