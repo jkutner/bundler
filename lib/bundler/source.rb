@@ -304,6 +304,12 @@ module Bundler
         @cached_gems[spec.full_name]
       end
 
+      def eql?(o)
+        Maven === o and repository_uri == o.repository_uri
+      end
+
+      alias == eql?
+
       private
 
         def download_specs(dependencies)
