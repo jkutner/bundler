@@ -273,6 +273,7 @@ module Bundler
           old     = Gem.sources
 
           if dependencies.nil?
+            # we only have to check if @options['name'] is null because of the mvn &blk form.
             dependencies = @options['name'] ?
                 [Bundler::Dependency.new(@options['name'], @options['version'])] : []
           end
