@@ -19,8 +19,8 @@ describe "bundle install with mvn" do
 
   it "fetches gems" do
     install_gemfile <<-G
-      mvn 'http://repo1.maven.org/maven2/' do
-        gem "mvn:org.slf4j:slf4j-simple", "1.6.1"
+      mvn 'https://repository.jboss.org/nexus/content/groups/public-jboss' do
+        gem "mvn:org.jboss.logging:jboss-logging", "3.0.0.b.5"
       end
     G
 
