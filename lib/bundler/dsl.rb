@@ -52,6 +52,18 @@ module Bundler
       options = Hash === args.last ? args.pop : {}
       version = args || [">= 0"]
 
+      if name =~ /\Amvn:/ and options[:mvn].nil?
+        if @source
+          # this is a little hacky. We should be able to use the once source with a bunch of gems
+          options[:mvn] = @source.repository_uri
+        else
+          # really just want to use :default but it causes the uri normalizer to choke.  Probably need to override
+          # normalize_uri in Source::Maven.
+          #options[:mvn] = :default
+          options[:mvn] = 'http://repo1.maven.org/maven2/'
+        end
+      end
+
       _deprecated_options(options)
       _normalize_options(name, version, options)
 
@@ -112,7 +124,6 @@ module Bundler
     end
 
     def mvn(repo, options={}, source_options={}, &blk)
-      options['require'] = options['name'].gsub(':', '/')
       source Source::Maven.new(_normalize_hash(options).merge('repo' => repo)), source_options, &blk
     end
 

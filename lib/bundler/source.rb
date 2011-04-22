@@ -255,10 +255,16 @@ module Bundler
     end
 
     class Maven < Rubygems
+
       def initialize(options={})
         super
-        @remotes << options['repo']
+        @remotes = options['repo'] ? [options['repo']] : []
         @cached_gems = {}
+      end
+
+      def repository_uri
+        # this is a little hacky
+        @remotes.empty? ? :default : @remotes[0]
       end
 
       def remote_specs(dependencies = nil)
@@ -267,7 +273,8 @@ module Bundler
           old     = Gem.sources
 
           if dependencies.nil?
-            dependencies = [Bundler::Dependency.new(@options['name'], @options['version'])]
+            dependencies = @options['name'] ?
+                [Bundler::Dependency.new(@options['name'], @options['version'])] : []
           end
 
           specs = download_specs(dependencies)
@@ -329,7 +336,7 @@ module Bundler
         end
 
         def gemify(uri)
-          if uri
+          if uri and uri != :default
             Gem::Maven::Gemify.new(uri)
           else
             Gem::Maven::Gemify.new
