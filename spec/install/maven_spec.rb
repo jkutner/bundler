@@ -24,6 +24,18 @@ describe "bundle install with mvn" do
       end
     G
 
+    should_be_installed("mvn:org.jboss.logging:jboss-logging 1.6.1")
+  end
+
+  it "fetches gems" do
+    install_gemfile <<-G
+      mvn 'https://repository.jboss.org/nexus/content/groups/public-jboss' do
+        gem "mvn:org.jboss.logging:jboss-logging", "3.0.0.b.5"
+        gem "mvn:org.slf4j:slf4j-simple", "1.6.1"
+      end
+    G
+
     should_be_installed("mvn:org.slf4j:slf4j-simple 1.6.1")
+    should_be_installed("mvn:org.jboss.logging:jboss-logging 1.6.1")
   end
 end

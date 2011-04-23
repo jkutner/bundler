@@ -9,7 +9,7 @@ require "open3"
 module Bundler
   module Source
     # TODO: Refactor this class
-    class Rubygems
+    class BaseGem
       attr_reader :remotes
 
       def initialize(options = {})
@@ -30,16 +30,6 @@ module Bundler
       def cached!
         @allow_cached = true
       end
-
-      def hash
-        Rubygems.hash
-      end
-
-      def eql?(o)
-        Rubygems === o
-      end
-
-      alias == eql?
 
       def options
         { "remotes" => @remotes.map { |r| r.to_s } }
@@ -254,17 +244,33 @@ module Bundler
       end
     end
 
-    class Maven < Rubygems
+    class Rubygems < BaseGem
+      def hash
+        Rubygems.hash
+      end
+
+      def eql?(o)
+        Rubygems === o
+      end
+
+      alias == eql?
+    end
+
+    class Maven < BaseGem
+
+      attr_reader :dependencies
 
       def initialize(options={})
         super
-        @remotes = options['repo'] ? [options['repo']] : []
         @cached_gems = {}
+        @dependencies = []
+        if @options['name']
+          add_dependency(@options['name'], @options['version'])
+        end
       end
 
-      def repository_uri
-        # this is a little hacky
-        @remotes.empty? ? :default : @remotes[0]
+      def add_dependency(name, version)
+        @dependencies << Bundler::Dependency.new(name, version)
       end
 
       def remote_specs(dependencies = nil)
@@ -272,12 +278,11 @@ module Bundler
           idx     = Index.new
           old     = Gem.sources
 
-          if dependencies.nil?
-            # we only have to check if @options['name'] is null because of the mvn &blk form.
-            dependencies = @options['name'] ?
-                [Bundler::Dependency.new(@options['name'], @options['version'])] : []
-          end
+          dependencies ||= @dependencies
 
+          remotes.each do |r|
+            Bundler.ui.info "Fetching partial source index for #{r}"
+          end
           specs = download_specs(dependencies)
           specs.each do |spec|
             idx << spec
@@ -305,10 +310,18 @@ module Bundler
       end
 
       def eql?(o)
-        Maven === o and repository_uri == o.repository_uri
+        return false unless Maven === o
+        remotes.each do |remote|
+          return false unless o.remotes.include?(remote)
+        end
+        dependencies.sort == o.dependencies.sort
       end
 
       alias == eql?
+
+      def hash
+        Maven.hash
+      end
 
       private
 
@@ -317,10 +330,12 @@ module Bundler
           dependencies.each do |d|
             if ![:development, :test, :provided].include?(d.type)
               remotes.each do |uri|
-                Bundler.ui.info "Fetching spec for '#{d.name}' from #{uri}"
+                Bundler.ui.debug "Fetching spec for '#{d.name} (#{d.requirement})' from #{uri}"
                 mvn_gemify = gemify(uri)
 
+                #$DEBUG = true
                 versions = mvn_gemify.get_versions(d.name).select do |v|
+                  #Bundler.ui.info "-- repo=#{uri},version=#{v}"
                   d.requirement.satisfied_by? Gem::Version.new(v)
                 end
 
@@ -335,6 +350,8 @@ module Bundler
                     specs << spec
                     specs += download_specs(spec.dependencies)
                   end
+                else
+                  Bundler.ui.info "No versions of '#{d.name} (#{d.requirement})' from #{uri}"
                 end
               end
             end
@@ -342,11 +359,11 @@ module Bundler
           specs
         end
 
-        def gemify(uri)
-          if uri and uri != :default
-            Gem::Maven::Gemify.new(uri)
-          else
+        def gemify(uri=nil)
+          if uri.nil?
             Gem::Maven::Gemify.new
+          else
+            Gem::Maven::Gemify.new(uri)
           end
         end
     end

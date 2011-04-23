@@ -53,15 +53,9 @@ module Bundler
       version = args || [">= 0"]
 
       if name =~ /\Amvn:/ and options[:mvn].nil?
-        if @source
-          # this is a little hacky. We should be able to use the once source with a bunch of gems
-          options[:mvn] = @source.repository_uri
-        else
-          # really just want to use :default but it causes the uri normalizer to choke.  Probably need to override
-          # normalize_uri in Source::Maven.
-          #options[:mvn] = :default
-          options[:mvn] = 'http://repo1.maven.org/maven2/'
-        end
+        # it would be better not to specify this here - but use something generic, and let maven_gemify decided what
+        # the default maven repo should be.
+        options['mvn'] = 'http://repo1.maven.org/maven2/'
       end
 
       _deprecated_options(options)
@@ -124,7 +118,17 @@ module Bundler
     end
 
     def mvn(repo, options={}, source_options={}, &blk)
-      source Source::Maven.new(_normalize_hash(options).merge('repo' => repo)), source_options, &blk
+      if options['name'].nil? and !block_given?
+        raise InvalidOption, 'Must specify a dependency name, or block of dependencies.'
+      end
+      
+      if @source.nil?
+        remotes = Array === repo ? repo : [repo]
+        source Source::Maven.new(_normalize_hash(options).merge('remotes' => remotes)), source_options, &blk
+      else
+        @source.add_dependency(options['name'], options['version'])
+        @source
+      end
     end
 
     def to_definition(lockfile, unlock)
