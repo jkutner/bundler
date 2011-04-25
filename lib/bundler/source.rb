@@ -151,7 +151,7 @@ module Bundler
           idx = Index.new
           have_bundler = false
           Gem.source_index.to_a.reverse.each do |dont_use_this_var, spec|
-            next if spec.name == 'bundler' && spec.version.to_s != VERSION
+            next if skip_spec?(spec)
             have_bundler = true if spec.name == 'bundler'
             spec.source = self
             idx << spec
@@ -173,6 +173,10 @@ module Bundler
           end
           idx
         end
+      end
+
+      def skip_spec?(spec)
+        spec.name == 'bundler' && spec.version.to_s != VERSION
       end
 
       def cached_specs
@@ -254,6 +258,11 @@ module Bundler
       end
 
       alias == eql?
+
+      def skip_spec?(spec)
+        # it sucks that we have to put maven specific stuff here.  There must be a better way to filter these out.
+        super or spec.full_name =~ /\Amvn:/
+      end
     end
 
     class Maven < BaseGem
@@ -294,6 +303,13 @@ module Bundler
         end
       end
 
+      def skip_spec?(spec)
+        # this should really check if its the right maven source - but there is nothing in the spec to determine
+        # that from.  But it seems that having a source of type Source::Maven is good enough for whatever the caller
+        # does with it.
+        super or !(spec.full_name =~ /\Amvn:/)
+      end
+
       def download_gem_from_uri(spec, uri)
         Gem::Maven::Gemify.new(uri).generate_gem(spec.name, spec.version)
       end
@@ -312,16 +328,37 @@ module Bundler
       def eql?(o)
         return false unless Maven === o
         remotes.each do |remote|
-          return false unless o.remotes.include?(remote)
+          return false unless o.remotes.map(&:to_s).include?(remote.to_s)
         end
         dependencies.sort == o.dependencies.sort
       end
 
       alias == eql?
 
+      def self.from_lock(options)
+        s = new(options)
+        Array(options["remote"]).each { |r| s.add_remote(r) }
+        s
+      end
+
+      def to_lock
+        out = "MAVEN\n"
+        out << @remotes.map {|r| "  remote: #{r}\n" }.join
+        if @dependencies.any?
+          out << "  specs:\n"
+        end
+        out
+      end
+
       def hash
         Maven.hash
       end
+
+      def to_s
+        remote_names = self.remotes.map { |r| r.to_s }.join(', ')
+        "maven repository #{remote_names}"
+      end
+      alias_method :name, :to_s
 
       private
 
