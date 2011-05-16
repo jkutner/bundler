@@ -4,9 +4,6 @@ require 'thor/actions'
 require 'rubygems/user_interaction'
 require 'rubygems/config_file'
 
-# Work around a RubyGems bug
-Gem.configuration
-
 module Bundler
   class CLI < Thor
     include Thor::Actions
@@ -16,7 +13,7 @@ module Bundler
       the_shell = (options["no-color"] ? Thor::Shell::Basic.new : shell)
       Bundler.ui = UI::Shell.new(the_shell)
       Bundler.ui.debug! if options["verbose"]
-      Gem::DefaultUserInteraction.ui = UI::RGProxy.new(Bundler.ui)
+      Bundler.rubygems.ui = UI::RGProxy.new(Bundler.ui)
     end
 
     check_unknown_options! unless ARGV.include?("exec") || ARGV.include?("config")
@@ -97,8 +94,12 @@ module Bundler
     D
     method_option "gemfile", :type => :string, :banner =>
       "Use the specified gemfile instead of Gemfile"
+    method_option "path", :type => :string, :banner =>
+      "Specify a different path than the system default ($BUNDLE_PATH or $GEM_HOME). Bundler will remember this value for future installs on this machine"
     def check
       ENV['BUNDLE_GEMFILE'] = File.expand_path(options[:gemfile]) if options[:gemfile]
+
+      Bundler.settings[:path] = File.expand_path(options[:path]) if options[:path]
       begin
         not_installed = Bundler.definition.missing_specs
       rescue GemNotFound, VersionConflict
@@ -162,6 +163,7 @@ module Bundler
       end
       opts[:without].map!{|g| g.to_sym }
 
+      # Can't use Bundler.settings for this because settings needs gemfile.dirname
       ENV['BUNDLE_GEMFILE'] = File.expand_path(opts[:gemfile]) if opts[:gemfile]
       ENV['RB_USER_INSTALL'] = '1' if Bundler::FREEBSD
 
@@ -218,8 +220,11 @@ module Bundler
         Bundler.ui.confirm "Your bundle is complete! " +
           "Use `bundle show [gemname]` to see where a bundled gem is installed."
       end
+      Installer.post_install_messages.to_a.each do |name, msg|
+        Bundler.ui.confirm "Post-install message from #{name}:\n#{msg}"
+      end
     rescue GemNotFound => e
-      if opts[:local]
+      if opts[:local] && Bundler.app_cache.exist?
         Bundler.ui.warn "Some gems seem to be missing from your vendor/cache directory."
       end
 
@@ -273,6 +278,33 @@ module Bundler
       end
     end
     map %w(list) => "show"
+
+    desc "outdated", "Returns a list of installed gems that are outdated."
+    long_desc <<-D
+      Outdated lists the names and versions of all gems that are outdated when compared to the source.
+      Calling outdated with [GEM [GEM]] will check only the given gems.
+    D
+    method_option "source", :type => :array, :banner => "Check against a specific source"
+    method_option "local", :type => :boolean, :banner =>
+      "Do not attempt to fetch gems remotely and use the gem cache instead"
+    def outdated(*gems)
+      sources = Array(options[:source])
+
+      if gems.empty? && sources.empty?
+        # We're doing a full update
+        definition = Bundler.definition(true)
+      else
+        definition = Bundler.definition(:gems => gems, :sources => sources)
+      end
+
+      options["local"] ? definition.resolve_with_cache! : definition.resolve_remotely!
+
+      definition.specs.each do |spec|
+        spec.source.fetch(spec) if spec.source.respond_to?(:fetch)
+        spec.source.outdated(spec)
+        Bundler.ui.debug "from #{spec.loaded_from} "
+      end
+    end
 
     desc "cache", "Cache all the gems to vendor/cache", :hide => true
     method_option "no-prune",  :type => :boolean, :banner => "Don't remove stale gems from the cache."
@@ -408,6 +440,13 @@ module Bundler
       IRB.start
     end
 
+    desc "benchmark [GROUP]", "Displays the time taken for each gem to be loaded into the environment"
+    def benchmark(group = nil)
+      Bundler.ui.debug!
+      Bundler.ui.debug "Gem require times as included by bundle:"
+      group ? Bundler.require(:default, *(group.split.map! {|g| g.to_sym })) : Bundler.require
+    end
+
     desc "version", "Prints the bundler's version information"
     def version
       Bundler.ui.info "Bundler version #{Bundler::VERSION}"
@@ -452,7 +491,15 @@ module Bundler
       constant_name = constant_name.split('-').map{|q| q.capitalize}.join('::') if constant_name =~ /-/
       constant_array = constant_name.split('::')
       FileUtils.mkdir_p(File.join(target, 'lib', name))
-      opts = {:name => name, :constant_name => constant_name, :constant_array => constant_array}
+      git_user_name = `git config user.name`.chomp
+      git_user_email = `git config user.email`.chomp
+      opts = {
+        :name           => name,
+        :constant_name  => constant_name,
+        :constant_array => constant_array,
+        :author         => git_user_name.empty? ? "TODO: Write your name" : git_user_name,
+        :email          => git_user_email.empty? ? "TODO: Write your email address" : git_user_email
+      }
       template(File.join("newgem/Gemfile.tt"),               File.join(target, "Gemfile"),                opts)
       template(File.join("newgem/Rakefile.tt"),              File.join(target, "Rakefile"),               opts)
       template(File.join("newgem/gitignore.tt"),             File.join(target, ".gitignore"),             opts)

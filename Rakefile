@@ -8,8 +8,8 @@ def sudo?
 end
 
 begin
+  # set up rspec tasks
   require 'rspec/core/rake_task'
-  require 'ronn'
 
   desc "Run specs"
   RSpec::Core::RakeTask.new do |t|
@@ -71,17 +71,35 @@ begin
           unless File.directory?("tmp/rubygems")
             system("git clone git://github.com/rubygems/rubygems.git tmp/rubygems")
           end
+          hash = nil
+
           Dir.chdir("tmp/rubygems") do
             system("git remote update")
             system("git checkout #{rg}")
             system("git pull origin master") if rg == "master"
+            hash = `git rev-parse HEAD`.strip
           end
+
+          puts "Running bundler specs against rubygems '#{rg}' at #{hash}"
           ENV["RUBYOPT"] = "-I#{File.expand_path("tmp/rubygems/lib")} #{rubyopt}"
         end
 
         task rg => "clone_rubygems_#{rg}"
         task "rubygems:all" => rg
       end
+
+      desc "Run specs under a Rubygems checkout (set RG=path)"
+      RSpec::Core::RakeTask.new("co") do |t|
+        t.rspec_opts = %w(-fs --color)
+        t.ruby_opts  = %w(-w)
+      end
+
+      task "setup_co" do
+        ENV["RUBYOPT"] = "-I#{File.expand_path ENV['RG']} #{rubyopt}"
+      end
+
+      task "co" => "setup_co"
+      task "rubygems:all" => "co"
     end
 
     namespace :ruby do
@@ -111,6 +129,37 @@ begin
 
   end
 
+  # set up man tasks that use ronn
+  require 'ronn'
+
+  namespace :man do
+    directory "lib/bundler/man"
+
+    Dir["man/*.ronn"].each do |ronn|
+      basename = File.basename(ronn, ".ronn")
+      roff = "lib/bundler/man/#{basename}"
+
+      file roff => ["lib/bundler/man", ronn] do
+        sh "ronn --roff --pipe #{ronn} > #{roff}"
+      end
+
+      file "#{roff}.txt" => roff do
+        sh "groff -Wall -mtty-char -mandoc -Tascii #{roff} | col -b > #{roff}.txt"
+      end
+
+      task :build_all_pages => "#{roff}.txt"
+    end
+
+    desc "Build the man pages"
+    task :build => "man:build_all_pages"
+
+    desc "Clean up from the built man pages"
+    task :clean do
+      rm_rf "lib/bundler/man"
+    end
+  end
+
+
 rescue LoadError
   task :spec do
     abort "Run `rake spec:deps` to be able to run the specs"
@@ -124,33 +173,6 @@ rescue LoadError
     end
   end
 
-end
-
-namespace :man do
-  directory "lib/bundler/man"
-
-  Dir["man/*.ronn"].each do |ronn|
-    basename = File.basename(ronn, ".ronn")
-    roff = "lib/bundler/man/#{basename}"
-
-    file roff => ["lib/bundler/man", ronn] do
-      sh "ronn --roff --pipe #{ronn} > #{roff}"
-    end
-
-    file "#{roff}.txt" => roff do
-      sh "groff -Wall -mtty-char -mandoc -Tascii #{roff} | col -b > #{roff}.txt"
-    end
-
-    task :build_all_pages => "#{roff}.txt"
-  end
-
-  desc "Build the man pages"
-  task :build => "man:build_all_pages"
-
-  desc "Clean up from the built man pages"
-  task :clean do
-    rm_rf "lib/bundler/man"
-  end
 end
 
 namespace :vendor do

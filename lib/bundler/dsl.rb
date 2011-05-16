@@ -82,18 +82,18 @@ module Bundler
     def source(source, options = {})
       case source
       when :gemcutter, :rubygems, :rubyforge then
-        rubygems_source "http://rubygems.org"
+        @rubygems_source.add_remote "http://rubygems.org"
         return
       when String
-        rubygems_source source
+        @rubygems_source.add_remote source
         return
+      else
+        @source = source
+        options[:prepend] ? @sources.unshift(@source) : @sources << @source
+
+        yield if block_given?
+        return @source
       end
-
-      @source = source
-      options[:prepend] ? @sources.unshift(@source) : @sources << @source
-
-      yield if block_given?
-      @source
     ensure
       @source = nil
     end
@@ -203,7 +203,7 @@ module Bundler
     def _normalize_options(name, version, opts)
       _normalize_hash(opts)
 
-      invalid_keys = opts.keys - %w(group groups git path name branch ref tag require submodules platform platforms mvn)
+      invalid_keys = opts.keys - %w(group groups git github path name branch ref tag require submodules platform platforms mvn)
       if invalid_keys.any?
         plural = invalid_keys.size > 1
         message = "You passed #{invalid_keys.map{|k| ':'+k }.join(", ")} "
@@ -229,7 +229,11 @@ module Bundler
         raise DslError, "`#{p}` is not a valid platform. The available options are: #{VALID_PLATFORMS.inspect}"
       end
 
-      # Normalize git and path options
+      if github = opts.delete(:github)
+        github = "#{github}/#{github}" unless github.include?("/")
+        opts["git"] = "git://github.com/#{github}.git"
+      end
+
       ["git", "path", "mvn"].each do |type|
         if param = opts[type]
           if version.first && version.first =~ /^\s*=?\s*(\d[^\s]*)\s*$/

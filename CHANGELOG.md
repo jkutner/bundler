@@ -1,3 +1,30 @@
+## 1.1.pre.4 (5 May, 2011)
+
+Bugfixes:
+
+  - Fix bug that could prevent installing new gems
+
+## 1.1.pre.3 (4 May, 2011)
+
+Features:
+
+  - Add `bundle outdated` to show outdated gems (@joelmoss)
+  - Remove BUNDLE_* from `Bundler.with_clean_env` (@wuputah)
+  - Add Bundler.clean_system, and clean_exec (@wuputah)
+  - Use git config for gem author name and email (@krekoten)
+
+Bugfixes:
+
+  - Fix error calling Bundler.rubygems.gem_path
+  - Fix error when Gem.path returns Gem::FS instead of String
+
+## 1.1.pre.2 (April 28, 2011)
+
+Features:
+
+  - Add :github option to Gemfile DSL for easy git repos
+  - Merge all fixes from 1.0.12 and 1.0.13
+
 ## 1.1.pre.1 (February 2, 2011)
 
 Bugfixes:
@@ -21,6 +48,21 @@ Removed:
   - Removed bundle install <path>
   - Removed bundle install --production
   - Removed bundle install --disable-shared-gems
+
+## 1.0.13 (May 4, 2011)
+
+Features:
+
+  - Compatibility with Rubygems master (soon to be v1.8) (@evanphx)
+  - Informative error when --path points to a broken symlink
+  - Support Rake 0.9 and greater (@e2)
+  - Output full errors for non-TTYs e.g. pow (@josh)
+
+Bugfixes:
+
+  - Allow spaces in gem path names for gem tasks (@rslifka)
+  - Have cap run bundle install from release_path (@martinjagusch)
+  - Quote git refspec so zsh doesn't expand it (@goneflyin)
 
 ## 1.0.12 (April 8, 2011)
 

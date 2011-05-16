@@ -16,14 +16,17 @@ module Spec
       build_repo gem_repo1 do
         build_gem "rack", %w(0.9.1 1.0.0) do |s|
           s.executables = "rackup"
+          s.post_install_message = "Rack's post install message"
         end
 
         build_gem "thin" do |s|
           s.add_dependency "rack"
+          s.post_install_message = "Thin's post install message"
         end
 
         build_gem "rack-obama" do |s|
           s.add_dependency "rack"
+          s.post_install_message = "Rack-obama's post install message"
         end
 
         build_gem "rack_middleware", "1.0" do |s|
@@ -322,6 +325,9 @@ module Spec
 
       Array(versions).each do |version|
         spec = builder.new(self, name, version)
+        if !spec.authors or spec.authors.empty?
+          spec.authors = ["no one"]
+        end
         yield spec if block_given?
         spec._build(options)
       end
@@ -454,6 +460,8 @@ module Spec
           @files = _default_files.merge(@files)
         end
 
+        @spec.authors = ["no one"]
+
         @files.each do |file, source|
           file = Pathname.new(path).join(file)
           FileUtils.mkdir_p(file.dirname)
@@ -563,6 +571,11 @@ module Spec
         Dir.chdir(lib_path) do
           destination = opts[:path] || _default_path
           FileUtils.mkdir_p(destination)
+
+          if !@spec.authors or @spec.authors.empty?
+            @spec.authors = ["that guy"]
+          end
+
           Gem::Builder.new(@spec).build
           if opts[:to_system]
             `gem install --ignore-dependencies #{@spec.full_name}.gem`
