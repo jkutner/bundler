@@ -279,16 +279,19 @@ module Bundler
     end
     map %w(list) => "show"
 
-    desc "outdated", "Returns a list of installed gems that are outdated."
+    desc "outdated [GEM]", "list installed gems with newer versions available"
     long_desc <<-D
-      Outdated lists the names and versions of all gems that are outdated when compared to the source.
-      Calling outdated with [GEM [GEM]] will check only the given gems.
+      Outdated lists the names and versions of gems that have a newer version available
+      in the given source. Calling outdated with [GEM [GEM]] will only check for newer
+      versions of the given gems. By default, available prerelease gems will be ignored.
     D
+    method_option "pre", :type => :boolean, :banner => "Check for newer pre-release gems"
     method_option "source", :type => :array, :banner => "Check against a specific source"
     method_option "local", :type => :boolean, :banner =>
       "Do not attempt to fetch gems remotely and use the gem cache instead"
     def outdated(*gems)
       sources = Array(options[:source])
+      current_specs = Bundler.load.specs
 
       if gems.empty? && sources.empty?
         # We're doing a full update
@@ -296,14 +299,38 @@ module Bundler
       else
         definition = Bundler.definition(:gems => gems, :sources => sources)
       end
-
       options["local"] ? definition.resolve_with_cache! : definition.resolve_remotely!
 
+      Bundler.ui.info "Outdated gems included in the bundle:"
       definition.specs.each do |spec|
+        next if !gems.empty? && !gems.include?(spec.name)
+
         spec.source.fetch(spec) if spec.source.respond_to?(:fetch)
-        spec.source.outdated(spec)
-        Bundler.ui.debug "from #{spec.loaded_from} "
+
+        if spec.git_version
+          current = current_specs.find{|s| spec.name == s.name }
+        else
+          current = spec
+          spec = definition.index[current.name].sort_by{|b| b.version }
+
+          if !options[:pre] && spec.size > 1
+            spec = spec.delete_if{|b| b.respond_to?(:version) && b.version.prerelease? }
+          end
+
+          spec = spec.last
+        end
+
+        gem_outdated = Gem::Version.new(spec.version) > Gem::Version.new(current.version)
+        git_outdated = current.git_version != spec.git_version
+        if gem_outdated || git_outdated
+          spec_version    = "#{spec.version}#{spec.git_version}"
+          current_version = "#{current.version}#{current.git_version}"
+          Bundler.ui.info "  * #{spec.name} (#{spec_version} > #{current_version})"
+        end
+        Bundler.ui.debug "from #{spec.loaded_from}"
       end
+
+      Bundler.ui.info ""
     end
 
     desc "cache", "Cache all the gems to vendor/cache", :hide => true
